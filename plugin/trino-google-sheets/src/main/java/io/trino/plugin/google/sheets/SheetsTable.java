@@ -27,11 +27,13 @@ import static java.util.Objects.requireNonNull;
 public class SheetsTable
 {
     private final List<ColumnMetadata> columnsMetadata;
+    private final String location;
     private final List<List<String>> values;
 
     @JsonCreator
     public SheetsTable(
             @JsonProperty("name") String name,
+            @JsonProperty("location") String location,
             @JsonProperty("columns") List<SheetsColumn> columns,
             @JsonProperty("values") List<List<String>> values)
     {
@@ -44,6 +46,7 @@ public class SheetsTable
         }
         this.columnsMetadata = columnsMetadata.build();
         this.values = values;
+        this.location = location;
     }
 
     @JsonProperty
@@ -55,5 +58,11 @@ public class SheetsTable
     public List<ColumnMetadata> getColumnsMetadata()
     {
         return columnsMetadata;
+    }
+
+    @JsonProperty
+    public String getLocation()
+    {
+        return location;
     }
 }

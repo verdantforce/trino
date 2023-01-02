@@ -1,0 +1,24 @@
+version: "3.9"
+
+services:
+  trino:
+    image: 'trinodb/trino:405'
+    container_name: trino
+    ports:
+      - "8080:8080"
+    volumes:
+      - ../target/trino-google-sheets-405:/usr/lib/trino/plugin/google-sheets
+      - ./gsheets.properties:/etc/trino/catalog/gsheets.properties
+      - ~/.config/gcloud/service_account.json:/opt/gsheet/service_account.json
+    environment:
+      - GOOGLE_APPLICATION_CREDENTIALS=/opt/gsheet/service_account.json
+  # worker:
+  #   image: 'trinodb/trino'
+  #   container_name: trino_worker
+  #   volumes:
+  #   - ./gsheet.properties:/usr/lib/trino/default/etc/catalog/gsheet.properties
+  #   - ./worker_config.properties:/usr/lib/trino/default/etc/config.properties
+  #   - ./target:/usr/lib/trino/plugin/example
+networks:
+  default:
+    name: trino-gsheets

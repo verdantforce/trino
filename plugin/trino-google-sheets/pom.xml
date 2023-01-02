@@ -76,6 +76,13 @@
         </dependency>
 
         <dependency>
+            <groupId>com.google.auth</groupId>
+            <artifactId>google-auth-library-oauth2-http</artifactId>
+            <version>0.10.0</version>
+            <scope>compile</scope>
+        </dependency>
+
+        <dependency>
             <groupId>com.google.guava</groupId>
             <artifactId>guava</artifactId>
         </dependency>
@@ -91,6 +98,12 @@
                 </exclusion>
             </exclusions>
         </dependency>
+
+<!--        <dependency>-->
+<!--            <groupId>com.google.errorprone</groupId>-->
+<!--            <artifactId>error_prone_annotations</artifactId>-->
+<!--            <version>2.15.0</version>-->
+<!--        </dependency>-->
 
         <dependency>
             <groupId>com.google.http-client</groupId>
@@ -194,5 +207,6 @@
             <artifactId>testng</artifactId>
             <scope>test</scope>
         </dependency>
+
     </dependencies>
 </project>

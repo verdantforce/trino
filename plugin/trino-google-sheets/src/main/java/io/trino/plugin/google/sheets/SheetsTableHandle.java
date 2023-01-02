@@ -20,21 +20,25 @@ import io.trino.spi.connector.SchemaTableName;
 
 import java.util.Objects;
 
+import static com.google.common.base.MoreObjects.toStringHelper;
 import static java.util.Objects.requireNonNull;
 
 public final class SheetsTableHandle
         implements ConnectorTableHandle
 {
     private final SchemaTableName schemaTableName;
+    private final String location;
 
     @JsonCreator
     public SheetsTableHandle(
             @JsonProperty("schemaName") String schemaName,
-            @JsonProperty("tableName") String tableName)
+            @JsonProperty("tableName") String tableName,
+            @JsonProperty("location") String location)
     {
         requireNonNull(schemaName, "schemaName is null");
         requireNonNull(tableName, "tableName is null");
         this.schemaTableName = new SchemaTableName(schemaName, tableName);
+        this.location = location;
     }
 
     @JsonProperty
@@ -77,6 +81,15 @@ public final class SheetsTableHandle
     @Override
     public String toString()
     {
-        return schemaTableName.toString();
+        return toStringHelper(this)
+                .add("schemaName", schemaTableName.getSchemaName())
+                .add("tableName", schemaTableName.getTableName())
+                .add("location", location)
+                .toString();
+    }
+
+    public String getLocation()
+    {
+        return location;
     }
 }

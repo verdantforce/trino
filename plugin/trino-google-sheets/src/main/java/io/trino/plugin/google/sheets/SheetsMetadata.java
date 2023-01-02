@@ -15,19 +15,28 @@ package io.trino.plugin.google.sheets;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import io.airlift.log.Logger;
+import io.airlift.slice.Slice;
 import io.trino.spi.TrinoException;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ColumnMetadata;
+import io.trino.spi.connector.ConnectorInsertTableHandle;
 import io.trino.spi.connector.ConnectorMetadata;
+import io.trino.spi.connector.ConnectorOutputMetadata;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorTableHandle;
 import io.trino.spi.connector.ConnectorTableMetadata;
+import io.trino.spi.connector.RetryMode;
 import io.trino.spi.connector.SchemaTableName;
 import io.trino.spi.connector.SchemaTablePrefix;
+import io.trino.spi.connector.TableColumnsMetadata;
 import io.trino.spi.connector.TableNotFoundException;
+import io.trino.spi.statistics.ComputedStatistics;
 
 import javax.inject.Inject;
 
+import java.util.Collection;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -40,6 +49,7 @@ import static java.util.Objects.requireNonNull;
 public class SheetsMetadata
         implements ConnectorMetadata
 {
+    private static final Logger log = Logger.get(SheetsMetadata.class);
     private final SheetsClient sheetsClient;
     private static final List<String> SCHEMAS = ImmutableList.of("default");
 
@@ -63,6 +73,7 @@ public class SheetsMetadata
     @Override
     public SheetsTableHandle getTableHandle(ConnectorSession session, SchemaTableName tableName)
     {
+        log.info("getTableHandle Called!");
         requireNonNull(tableName, "tableName is null");
         if (!listSchemaNames(session).contains(tableName.getSchemaName())) {
             return null;
@@ -73,7 +84,9 @@ public class SheetsMetadata
             return null;
         }
 
-        return new SheetsTableHandle(tableName.getSchemaName(), tableName.getTableName());
+        SheetsTableHandle sheetsTableHandle = new SheetsTableHandle(tableName.getSchemaName(), tableName.getTableName(), table.get().getLocation());
+        log.info("returning sheets table handle: %s", sheetsTableHandle);
+        return sheetsTableHandle;
     }
 
     @Override
@@ -101,19 +114,87 @@ public class SheetsMetadata
     }
 
     @Override
-    public Map<SchemaTableName, List<ColumnMetadata>> listTableColumns(ConnectorSession session, SchemaTablePrefix prefix)
+    public Iterator<TableColumnsMetadata> streamTableColumns(ConnectorSession session, SchemaTablePrefix prefix)
     {
         requireNonNull(prefix, "prefix is null");
-        ImmutableMap.Builder<SchemaTableName, List<ColumnMetadata>> columns = ImmutableMap.builder();
+        ImmutableList.Builder<TableColumnsMetadata> metadata = ImmutableList.builder();
+
         for (SchemaTableName tableName : listTables(session, prefix.getSchema())) {
             Optional<ConnectorTableMetadata> tableMetadata = getTableMetadata(tableName);
             // table can disappear during listing operation
             if (tableMetadata.isPresent()) {
-                columns.put(tableName, tableMetadata.get().getColumns());
+                metadata.add(new TableColumnsMetadata(
+                        tableName,
+                        tableMetadata.map(ConnectorTableMetadata::getColumns)));
             }
         }
-        return columns.buildOrThrow();
+        return metadata.build().stream().iterator();
     }
+//
+//    /**
+//     * Begin the atomic creation of a table with data.
+//     * <p>
+//     * <p/>
+//     * If connector does not support execution with retries, the method should throw:
+//     * <pre>
+//     *     new TrinoException(NOT_SUPPORTED, "This connector does not support query retries")
+//     * </pre>
+//     * unless {@code retryMode} is set to {@code NO_RETRIES}.
+//     *
+//     * @param session
+//     * @param tableMetadata
+//     * @param layout
+//     * @param retryMode
+//     */
+//    @Override
+//    public ConnectorOutputTableHandle beginCreateTable(ConnectorSession session, ConnectorTableMetadata tableMetadata, Optional<ConnectorTableLayout> layout, RetryMode retryMode)
+//    {
+//        return ConnectorMetadata.super.beginCreateTable(session, tableMetadata, layout, retryMode);
+//    }
+//
+//    /**
+//     * Finish a table creation with data after the data is written.
+//     *
+//     * @param session
+//     * @param tableHandle
+//     * @param fragments
+//     * @param computedStatistics
+//     */
+//    @Override
+//    public Optional<ConnectorOutputMetadata> finishCreateTable(ConnectorSession session, ConnectorOutputTableHandle tableHandle, Collection<Slice> fragments, Collection<ComputedStatistics> computedStatistics)
+//    {
+//        return ConnectorMetadata.super.finishCreateTable(session, tableHandle, fragments, computedStatistics);
+//    }
+
+    @Override
+    public Optional<ConnectorOutputMetadata> finishInsert(ConnectorSession session, ConnectorInsertTableHandle insertHandle, Collection<Slice> fragments, Collection<ComputedStatistics> computedStatistics)
+    {
+        return Optional.empty();
+    }
+
+    @Override
+    public ConnectorInsertTableHandle beginInsert(ConnectorSession session, ConnectorTableHandle tableHandle, List<ColumnHandle> columns, RetryMode retryMode)
+    {
+        List<SheetsColumnHandle> columnHandles = columns.stream().map(x -> (SheetsColumnHandle) x).toList();
+        return new SheetsInsertTableHandle(
+                (SheetsTableHandle) tableHandle,
+                columnHandles);
+    }
+
+//    @Override
+//    public Map<SchemaTableName, List<ColumnMetadata>> listTableColumns(ConnectorSession session, SchemaTablePrefix prefix)
+//    {
+//        requireNonNull(prefix, "prefix is null");
+//        ImmutableMap.Builder<SchemaTableName, List<ColumnMetadata>> columns = ImmutableMap.builder();
+//        for (SchemaTableName tableName : listTables(session, prefix.getSchema())) {
+//            Optional<ConnectorTableMetadata> tableMetadata = getTableMetadata(tableName);
+//            // table can disappear during listing operation
+//            if (tableMetadata.isPresent()) {
+//                columns.put(tableName, tableMetadata.get().getColumns());
+//            }
+//        }
+//        return columns.buildOrThrow();
+//    }
 
     private Optional<ConnectorTableMetadata> getTableMetadata(SchemaTableName tableName)
     {

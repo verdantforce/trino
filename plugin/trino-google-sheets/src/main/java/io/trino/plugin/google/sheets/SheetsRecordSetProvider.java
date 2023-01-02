@@ -13,6 +13,7 @@
  */
 package io.trino.plugin.google.sheets;
 
+import io.airlift.log.Logger;
 import io.trino.spi.connector.ColumnHandle;
 import io.trino.spi.connector.ConnectorRecordSetProvider;
 import io.trino.spi.connector.ConnectorSession;
@@ -29,12 +30,16 @@ import static java.util.Objects.requireNonNull;
 public class SheetsRecordSetProvider
         implements ConnectorRecordSetProvider
 {
+    private static final Logger log = Logger.get(SheetsRecordSetProvider.class);
+
     @Override
     public RecordSet getRecordSet(ConnectorTransactionHandle transaction, ConnectorSession session, ConnectorSplit split, ConnectorTableHandle table, List<? extends ColumnHandle> columns)
     {
         requireNonNull(split, "split is null");
         SheetsSplit sheetsSplit = (SheetsSplit) split;
-
+        SheetsTableHandle sheetsTableHandle = (SheetsTableHandle) table;
+        log.info("reading data from tableName=%s, schemaName=%s", sheetsTableHandle.getTableName(), sheetsTableHandle.getSchemaName());
+        log.info("split is %s", sheetsSplit.getValues());
         List<SheetsColumnHandle> handles = columns.stream().map(c -> (SheetsColumnHandle) c).collect(Collectors.toList());
         return new SheetsRecordSet(sheetsSplit, handles);
     }
