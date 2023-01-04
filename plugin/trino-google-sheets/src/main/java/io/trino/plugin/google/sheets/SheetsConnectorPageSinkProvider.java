@@ -13,6 +13,7 @@
  */
 package io.trino.plugin.google.sheets;
 
+import com.google.inject.Inject;
 import io.airlift.log.Logger;
 import io.trino.spi.connector.ConnectorInsertTableHandle;
 import io.trino.spi.connector.ConnectorOutputTableHandle;
@@ -27,10 +28,19 @@ public class SheetsConnectorPageSinkProvider
 {
     private static final Logger log = Logger.get(SheetsConnectorPageSinkProvider.class);
 
+    private final SheetsConnectorPageSinkFactory sheetsConnectorPageSinkFactory;
+
+    @Inject
+    public SheetsConnectorPageSinkProvider(SheetsConnectorPageSinkFactory sheetsConnectorPageSinkFactory)
+    {
+        this.sheetsConnectorPageSinkFactory = sheetsConnectorPageSinkFactory;
+    }
+
     @Override
     public ConnectorPageSink createPageSink(ConnectorTransactionHandle transactionHandle, ConnectorSession session, ConnectorOutputTableHandle outputTableHandle, ConnectorPageSinkId pageSinkId)
     {
-        return null;
+        log.info("create Page Sink for create table as");
+        throw new RuntimeException("gsheets create table has NOT been implemented!");
     }
 
     @Override
@@ -39,6 +49,6 @@ public class SheetsConnectorPageSinkProvider
         log.info("create Page Sink for insert");
         SheetsInsertTableHandle sheetsInsertTableHandle = (SheetsInsertTableHandle) insertTableHandle;
         log.info("insertTableHandle: %s", sheetsInsertTableHandle);
-        return new SheetsConnectorPageSink(sheetsInsertTableHandle, SheetsClient.getDefault());
+        return sheetsConnectorPageSinkFactory.create(sheetsInsertTableHandle);
     }
 }

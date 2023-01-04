@@ -33,6 +33,7 @@ public class SheetsModule
         binder.bind(SheetsSplitManager.class).in(Scopes.SINGLETON);
         binder.bind(SheetsRecordSetProvider.class).in(Scopes.SINGLETON);
         binder.bind(SheetsConnectorPageSinkProvider.class).in(Scopes.SINGLETON);
+        binder.bind(SheetsConnectorPageSinkFactory.class).in(Scopes.SINGLETON);
 
         configBinder(binder).bindConfig(SheetsConfig.class);
 

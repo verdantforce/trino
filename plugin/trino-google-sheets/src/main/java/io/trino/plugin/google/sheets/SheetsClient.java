@@ -23,6 +23,8 @@ import com.google.api.services.sheets.v4.model.UpdateValuesResponse;
 import com.google.api.services.sheets.v4.model.ValueRange;
 import com.google.auth.http.HttpCredentialsAdapter;
 import com.google.auth.oauth2.GoogleCredentials;
+import com.google.common.base.Supplier;
+import com.google.common.base.Suppliers;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.collect.ImmutableList;
@@ -52,6 +54,7 @@ import static io.trino.plugin.google.sheets.SheetsErrorCode.SHEETS_METASTORE_ERR
 import static io.trino.plugin.google.sheets.SheetsErrorCode.SHEETS_TABLE_LOAD_ERROR;
 import static io.trino.plugin.google.sheets.SheetsErrorCode.SHEETS_UNKNOWN_TABLE_ERROR;
 import static java.util.Locale.ENGLISH;
+import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 public class SheetsClient
@@ -69,13 +72,13 @@ public class SheetsClient
 
     private final String metadataSheetId;
 
-    private Sheets readSheetsService;
-    private Sheets writeSheetsService;
+    private final Supplier<Sheets> readSheetsService = Suppliers.memoize(() -> createSheetsService(true));
+    private final Supplier<Sheets> writeSheetsService = Suppliers.memoize(() -> createSheetsService(false));
 
     @Inject
     public SheetsClient(SheetsConfig config, JsonCodec<Map<String, List<SheetsTable>>> catalogCodec)
     {
-//        requireNonNull(catalogCodec, "catalogCodec is null");
+        requireNonNull(catalogCodec, "catalogCodec is null");
 
         this.metadataSheetId = config.getMetadataSheetId();
 
@@ -102,11 +105,6 @@ public class SheetsClient
         this.sheetDataCache = buildNonEvictableCache(
                 newCacheBuilder(expiresAfterWriteMillis, maxCacheSize),
                 CacheLoader.from(this::readAllValuesFromSheetExpression));
-    }
-
-    public static SheetsClient getDefault()
-    {
-        return new SheetsClient(new SheetsConfig(), null);
     }
 
     public Optional<SheetsTable> getTable(String tableName)
@@ -227,11 +225,8 @@ public class SheetsClient
 
     public List<List<Object>> readData(String spreadsheetId, String range)
     {
-        if (readSheetsService == null) {
-            readSheetsService = createSheetsService(true);
-        }
         try {
-            List<List<Object>> values = readSheetsService.spreadsheets().values().get(spreadsheetId, range).execute().getValues();
+            List<List<Object>> values = readSheetsService.get().spreadsheets().values().get(spreadsheetId, range).execute().getValues();
             if (values == null || values.isEmpty()) {
                 throw new RuntimeException("no data was read!");
             }
@@ -245,13 +240,9 @@ public class SheetsClient
 
     public int writeData(String spreadsheetId, String range, List<List<Object>> values)
     {
-        if (writeSheetsService == null) {
-            writeSheetsService = createSheetsService(false);
-        }
-
         try {
             ValueRange writeData = new ValueRange().setValues(values);
-            UpdateValuesResponse writeResponse = writeSheetsService.spreadsheets().values().update(spreadsheetId, range, writeData).setValueInputOption("RAW").execute();
+            UpdateValuesResponse writeResponse = writeSheetsService.get().spreadsheets().values().update(spreadsheetId, range, writeData).setValueInputOption("RAW").execute();
             if (writeResponse.getUpdatedCells() == 0) {
                 throw new RuntimeException("no rows were updated!");
             }

@@ -14,7 +14,6 @@
 package io.trino.plugin.google.sheets;
 
 import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableMap;
 import io.airlift.log.Logger;
 import io.airlift.slice.Slice;
 import io.trino.spi.Page;
@@ -24,7 +23,10 @@ import io.trino.spi.connector.ConnectorPageSink;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.CompletableFuture.completedFuture;
@@ -61,20 +63,12 @@ public class SheetsConnectorPageSink
 
         //   generate the data to write to spreadsheet
         // step1: read existing data from gsheet
-        // TODO: figure out why location is not propagated to table handle
-        // hardcoding gsheet id and range for now
-        // note with location, a bit of string manipulation is needed to get extract the sheetID
-        // and sheet name from it example
-        //
         final String sheetID = getSheetId();
         final String range = getSheetRange();
         List<List<Object>> data = sheetsClient.readData(sheetID, range);
 
         List<SheetsColumnHandle> columnHandles = sheetsInsertTableHandle.getColumnHandles();
-
-        ImmutableMap.Builder<Integer, SheetsColumnHandle> columnsMapBuilder = ImmutableMap.builder();
-        columnHandles.forEach(x -> columnsMapBuilder.put(x.getOrdinalPosition(), x));
-        ImmutableMap<Integer, SheetsColumnHandle> columnsMap = columnsMapBuilder.buildOrThrow();
+        Map<Integer, SheetsColumnHandle> columnsMap = columnHandles.stream().collect(Collectors.toUnmodifiableMap(SheetsColumnHandle::getOrdinalPosition, Function.identity()));
 
         // step 2: append data to the end of existing data
         // Note: Currently all columns are passed here (regardless of whether it is getting inserted)
