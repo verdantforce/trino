@@ -109,8 +109,9 @@ public class SheetsClient
 
     public Optional<SheetsTable> getTable(String tableName)
     {
-        String location = tableSheetMappingCache.getUnchecked(tableName)
-                .orElseThrow(() -> new TrinoException(SHEETS_UNKNOWN_TABLE_ERROR, "Sheet expression not found for table " + tableName));
+        Optional<String> location = tableSheetMappingCache.getUnchecked(tableName);
+        if (location.isEmpty()) return Optional.empty();
+
         List<List<String>> values = convertToStringValues(readAllValues(tableName));
         if (values.size() > 0) {
             ImmutableList.Builder<SheetsColumn> columns = ImmutableList.builder();
@@ -128,8 +129,8 @@ public class SheetsClient
                 columns.add(new SheetsColumn(columnValue, VarcharType.VARCHAR));
             }
             List<List<String>> dataValues = values.subList(1, values.size()); // removing header info
-            SheetsTable sheetsTable = new SheetsTable(tableName, location, columns.build(), dataValues);
-//            log.info("getTable %s: %s", tableName, sheetsTable);
+            SheetsTable sheetsTable = new SheetsTable(tableName, location.get(), columns.build(), dataValues);
+            //            log.info("getTable %s: %s", tableName, sheetsTable);
             return Optional.of(sheetsTable);
         }
         return Optional.empty();
