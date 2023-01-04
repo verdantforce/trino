@@ -20,6 +20,7 @@ import io.trino.spi.connector.ColumnMetadata;
 
 import java.util.List;
 
+import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Strings.isNullOrEmpty;
 import static java.util.Objects.requireNonNull;
@@ -29,6 +30,7 @@ public class SheetsTable
     private final List<ColumnMetadata> columnsMetadata;
     private final String location;
     private final List<List<String>> values;
+    private final String name;
 
     @JsonCreator
     public SheetsTable(
@@ -47,6 +49,7 @@ public class SheetsTable
         this.columnsMetadata = columnsMetadata.build();
         this.values = values;
         this.location = location;
+        this.name = name;
     }
 
     @JsonProperty
@@ -64,5 +67,17 @@ public class SheetsTable
     public String getLocation()
     {
         return location;
+    }
+
+    @Override
+    public String toString()
+    {
+        List<String> columns = columnsMetadata.stream().map(ColumnMetadata::getName).toList();
+        String columnInfo = "[" + String.join(",", columns) + "]";
+        return toStringHelper(this)
+                .add("name", name)
+                .add("location", location)
+                .add("columns", columnInfo)
+                .toString();
     }
 }

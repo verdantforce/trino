@@ -176,6 +176,7 @@ public class SheetsMetadata
     public ConnectorInsertTableHandle beginInsert(ConnectorSession session, ConnectorTableHandle tableHandle, List<ColumnHandle> columns, RetryMode retryMode)
     {
         List<SheetsColumnHandle> columnHandles = columns.stream().map(x -> (SheetsColumnHandle) x).toList();
+//        log.info("beginInsert: %s", ((SheetsTableHandle) tableHandle).toString());
         return new SheetsInsertTableHandle(
                 (SheetsTableHandle) tableHandle,
                 columnHandles);

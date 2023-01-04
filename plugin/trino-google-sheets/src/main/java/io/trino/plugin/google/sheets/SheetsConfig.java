@@ -103,7 +103,7 @@ public class SheetsConfig
         return this;
     }
 
-    @MinDuration("1m")
+    @MinDuration("1s")
     public Duration getSheetsDataExpireAfterWrite()
     {
         return sheetsDataExpireAfterWrite;

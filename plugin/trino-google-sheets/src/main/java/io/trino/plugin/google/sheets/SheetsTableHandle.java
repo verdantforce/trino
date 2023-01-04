@@ -88,6 +88,7 @@ public final class SheetsTableHandle
                 .toString();
     }
 
+    @JsonProperty
     public String getLocation()
     {
         return location;

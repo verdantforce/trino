@@ -9,6 +9,7 @@ services:
     volumes:
       - ../target/trino-google-sheets-405:/usr/lib/trino/plugin/google-sheets
       - ./gsheets.properties:/etc/trino/catalog/gsheets.properties
+      - ./log.properties:/etc/trino/log.properties
       - ~/.config/gcloud/service_account.json:/opt/gsheet/service_account.json
     environment:
       - GOOGLE_APPLICATION_CREDENTIALS=/opt/gsheet/service_account.json

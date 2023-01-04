@@ -39,6 +39,6 @@ public class SheetsConnectorPageSinkProvider
         log.info("create Page Sink for insert");
         SheetsInsertTableHandle sheetsInsertTableHandle = (SheetsInsertTableHandle) insertTableHandle;
         log.info("insertTableHandle: %s", sheetsInsertTableHandle);
-        return new SheetsConnectorPageSink(sheetsInsertTableHandle);
+        return new SheetsConnectorPageSink(sheetsInsertTableHandle, SheetsClient.getDefault());
     }
 }

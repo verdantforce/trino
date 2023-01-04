@@ -116,11 +116,11 @@
             <artifactId>guice</artifactId>
         </dependency>
 
-        <dependency>
-            <groupId>com.google.oauth-client</groupId>
-            <artifactId>google-oauth-client</artifactId>
-            <version>1.31.0</version>
-        </dependency>
+<!--        <dependency>-->
+<!--            <groupId>com.google.oauth-client</groupId>-->
+<!--            <artifactId>google-oauth-client</artifactId>-->
+<!--            <version>1.31.0</version>-->
+<!--        </dependency>-->
 
         <dependency>
             <groupId>javax.inject</groupId>

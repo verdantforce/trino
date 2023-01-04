@@ -13,16 +13,6 @@
  */
 package io.trino.plugin.google.sheets;
 
-import com.google.api.client.googleapis.javanet.GoogleNetHttpTransport;
-import com.google.api.client.http.javanet.NetHttpTransport;
-import com.google.api.client.json.JsonFactory;
-import com.google.api.client.json.jackson2.JacksonFactory;
-import com.google.api.services.sheets.v4.Sheets;
-import com.google.api.services.sheets.v4.SheetsScopes;
-import com.google.api.services.sheets.v4.model.UpdateValuesResponse;
-import com.google.api.services.sheets.v4.model.ValueRange;
-import com.google.auth.http.HttpCredentialsAdapter;
-import com.google.auth.oauth2.GoogleCredentials;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import io.airlift.log.Logger;
@@ -33,9 +23,7 @@ import io.trino.spi.connector.ConnectorPageSink;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 
 import static java.util.Objects.requireNonNull;
@@ -47,55 +35,13 @@ public class SheetsConnectorPageSink
     private static final Logger log = Logger.get(SheetsConnectorPageSink.class);
 
     private final SheetsInsertTableHandle sheetsInsertTableHandle;
-    private final String location = "1a2auf5l_uGkMPs6m2F-Q4nBpfur1qpHQ6kF7qZ66Nw8#test_table1";
 
-    public SheetsConnectorPageSink(SheetsInsertTableHandle sheetsInsertTableHandle)
+    private final SheetsClient sheetsClient;
+
+    public SheetsConnectorPageSink(SheetsInsertTableHandle sheetsInsertTableHandle, SheetsClient sheetsClient)
     {
         this.sheetsInsertTableHandle = sheetsInsertTableHandle;
-    }
-
-    private List<List<Object>> readData(String spreadsheetId, String range)
-    {
-        try {
-            final NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
-            final JsonFactory jsonFactory = JacksonFactory.getDefaultInstance();
-
-            GoogleCredentials googleCredentials = GoogleCredentials.getApplicationDefault()
-                    .createScoped(Collections.singletonList(SheetsScopes.SPREADSHEETS));
-            Sheets service = new Sheets.Builder(httpTransport, jsonFactory, new HttpCredentialsAdapter(googleCredentials)).setApplicationName("presto-gsheet-connector").build();
-            ValueRange readResponse = service.spreadsheets().values().get(spreadsheetId, range).execute();
-            List<List<Object>> values = readResponse.getValues();
-            if (values == null || values.isEmpty()) {
-                throw new RuntimeException("no data was read!");
-            }
-            return values;
-        }
-        catch (Exception e) {
-            log.error(e, "failed to read data from sheetID=%s, range=%s", spreadsheetId, range);
-            throw new RuntimeException("failed to read data");
-        }
-    }
-
-    private int writeData(String spreadsheetId, String range, List<List<Object>> values)
-    {
-        try {
-            final NetHttpTransport httpTransport = GoogleNetHttpTransport.newTrustedTransport();
-            final JsonFactory jsonFactory = JacksonFactory.getDefaultInstance();
-
-            GoogleCredentials googleCredentials = GoogleCredentials.getApplicationDefault()
-                    .createScoped(Collections.singletonList(SheetsScopes.SPREADSHEETS));
-            Sheets service = new Sheets.Builder(httpTransport, jsonFactory, new HttpCredentialsAdapter(googleCredentials)).setApplicationName("presto-gsheet-connector").build();
-            ValueRange writeData = new ValueRange().setValues(values);
-            UpdateValuesResponse writeResponse = service.spreadsheets().values().update(spreadsheetId, range, writeData).setValueInputOption("RAW").execute();
-            if (writeResponse.getUpdatedCells() == 0) {
-                throw new RuntimeException("no rows were updated!");
-            }
-            return writeResponse.getUpdatedRows();
-        }
-        catch (Exception e) {
-            log.error(e, "failed to write data to sheetID=%s, range=%s", spreadsheetId, range);
-            throw new RuntimeException("failed to write data to gsheet!");
-        }
+        this.sheetsClient = sheetsClient;
     }
 
     /**
@@ -121,10 +67,8 @@ public class SheetsConnectorPageSink
         // and sheet name from it example
         //
         final String sheetID = getSheetId();
-        final Optional<String> sheetName = getSheetName();
-        // default to 10K columns for now
-        final String range = sheetName.map(x -> x + "!").orElse("") + "$1:$10000";
-        List<List<Object>> data = readData(sheetID, range);
+        final String range = getSheetRange();
+        List<List<Object>> data = sheetsClient.readData(sheetID, range);
 
         List<SheetsColumnHandle> columnHandles = sheetsInsertTableHandle.getColumnHandles();
 
@@ -153,25 +97,19 @@ public class SheetsConnectorPageSink
         }
 
         // write to google spreadsheet
-        log.info("updated %d cells", writeData(sheetID, range, data));
+        log.info("updated %d rows", sheetsClient.writeData(sheetID, range, data));
         return NOT_BLOCKED;
     }
 
     private String getSheetId()
     {
-        return location.split("#")[0];
+        return sheetsInsertTableHandle.getTableHandle().getLocation().split("#")[0];
     }
 
-    private Optional<String> getSheetName()
+    private String getSheetRange()
     {
-        String[] xs = location.split("#");
-        if (xs.length > 1) {
-            // there is a sheet/tab name within the sheet
-            return Optional.of(xs[1]);
-        }
-        else {
-            return Optional.empty();
-        }
+        String[] xs = sheetsInsertTableHandle.getTableHandle().getLocation().split("#");
+        return xs[1];
     }
 
     /**
