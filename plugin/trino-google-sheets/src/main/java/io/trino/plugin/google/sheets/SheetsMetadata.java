@@ -15,6 +15,7 @@ package io.trino.plugin.google.sheets;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import com.google.common.collect.Streams;
 import io.airlift.log.Logger;
 import io.airlift.slice.Slice;
 import io.trino.spi.TrinoException;
@@ -23,8 +24,10 @@ import io.trino.spi.connector.ColumnMetadata;
 import io.trino.spi.connector.ConnectorInsertTableHandle;
 import io.trino.spi.connector.ConnectorMetadata;
 import io.trino.spi.connector.ConnectorOutputMetadata;
+import io.trino.spi.connector.ConnectorOutputTableHandle;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorTableHandle;
+import io.trino.spi.connector.ConnectorTableLayout;
 import io.trino.spi.connector.ConnectorTableMetadata;
 import io.trino.spi.connector.RetryMode;
 import io.trino.spi.connector.SchemaTableName;
@@ -44,6 +47,7 @@ import java.util.Optional;
 import static com.google.common.collect.ImmutableList.toImmutableList;
 import static com.google.common.collect.Iterables.getOnlyElement;
 import static io.trino.plugin.google.sheets.SheetsErrorCode.SHEETS_UNKNOWN_TABLE_ERROR;
+import static java.lang.Math.toIntExact;
 import static java.util.Objects.requireNonNull;
 
 public class SheetsMetadata
@@ -92,6 +96,7 @@ public class SheetsMetadata
     @Override
     public ConnectorTableMetadata getTableMetadata(ConnectorSession session, ConnectorTableHandle table)
     {
+        log.info("getTableMetadata!");
         SheetsTableHandle tableHandle = (SheetsTableHandle) table;
         return getTableMetadata(tableHandle.toSchemaTableName())
                 .orElseThrow(() -> new TrinoException(SHEETS_UNKNOWN_TABLE_ERROR, "Metadata not found for table " + tableHandle.getTableName()));
@@ -100,6 +105,7 @@ public class SheetsMetadata
     @Override
     public Map<String, ColumnHandle> getColumnHandles(ConnectorSession session, ConnectorTableHandle tableHandle)
     {
+        log.info("getColumnHandles");
         SheetsTableHandle sheetsTableHandle = (SheetsTableHandle) tableHandle;
         SheetsTable table = sheetsClient.getTable(sheetsTableHandle.getTableName())
                 .orElseThrow(() -> new TableNotFoundException(sheetsTableHandle.toSchemaTableName()));
@@ -130,51 +136,61 @@ public class SheetsMetadata
         }
         return metadata.build().stream().iterator();
     }
-//
-//    /**
-//     * Begin the atomic creation of a table with data.
-//     * <p>
-//     * <p/>
-//     * If connector does not support execution with retries, the method should throw:
-//     * <pre>
-//     *     new TrinoException(NOT_SUPPORTED, "This connector does not support query retries")
-//     * </pre>
-//     * unless {@code retryMode} is set to {@code NO_RETRIES}.
-//     *
-//     * @param session
-//     * @param tableMetadata
-//     * @param layout
-//     * @param retryMode
-//     */
-//    @Override
-//    public ConnectorOutputTableHandle beginCreateTable(ConnectorSession session, ConnectorTableMetadata tableMetadata, Optional<ConnectorTableLayout> layout, RetryMode retryMode)
-//    {
-//        return ConnectorMetadata.super.beginCreateTable(session, tableMetadata, layout, retryMode);
-//    }
-//
-//    /**
-//     * Finish a table creation with data after the data is written.
-//     *
-//     * @param session
-//     * @param tableHandle
-//     * @param fragments
-//     * @param computedStatistics
-//     */
-//    @Override
-//    public Optional<ConnectorOutputMetadata> finishCreateTable(ConnectorSession session, ConnectorOutputTableHandle tableHandle, Collection<Slice> fragments, Collection<ComputedStatistics> computedStatistics)
-//    {
-//        return ConnectorMetadata.super.finishCreateTable(session, tableHandle, fragments, computedStatistics);
-//    }
+
+    @Override
+    public ConnectorOutputTableHandle beginCreateTable(ConnectorSession session, ConnectorTableMetadata tableMetadata, Optional<ConnectorTableLayout> layout, RetryMode retryMode)
+    {
+        log.info("beginCreateTable");
+        String location = SheetsTableProperties.getLocation(tableMetadata.getProperties());
+        String[] parts = location.split("#");
+        String sheetId = parts[0];
+        String tabId = parts[1];
+        List<String> tabs = sheetsClient.getSheetTabs(sheetId);
+        if (tabs.stream().anyMatch(s -> s.equals(tabId))) {
+            throw new RuntimeException(String.format("tab %s already exists", tabId));
+        }
+        sheetsClient.createSheetTab(sheetId, tabId);
+        SheetsOutputTableHandle sheetsOutputTableHandle = new SheetsOutputTableHandle(
+                new SheetsTableHandle(
+                        tableMetadata.getTable().getSchemaName(),
+                        tableMetadata.getTable().getTableName(),
+                        SheetsTableProperties.getLocation(tableMetadata.getProperties())),
+                Streams.mapWithIndex(
+                        tableMetadata.getColumns().stream(),
+                        (columnMetadata, index) -> new SheetsColumnHandle(
+                                columnMetadata.getName(),
+                                columnMetadata.getType(),
+                                toIntExact(index))).toList());
+        log.info("output handle:\n %s", sheetsOutputTableHandle);
+        return sheetsOutputTableHandle;
+    }
+
+    @Override
+    public Optional<ConnectorOutputMetadata> finishCreateTable(ConnectorSession session, ConnectorOutputTableHandle tableHandle, Collection<Slice> fragments, Collection<ComputedStatistics> computedStatistics)
+    {
+        log.info("finishCreateTable");
+        log.info("adding row to metadata table sheet");
+        SheetsOutputTableHandle handle = (SheetsOutputTableHandle) tableHandle;
+        String tableName = handle.getTableHandle().getTableName();
+        String location = handle.getTableHandle().getLocation();
+        // TODO: refactor code to handle parsing of gsheet location to sheetId, tabId
+        sheetsClient.insertTableMapping(tableName, location);
+        return Optional.empty();
+    }
 
     @Override
     public Optional<ConnectorOutputMetadata> finishInsert(ConnectorSession session, ConnectorInsertTableHandle insertHandle, Collection<Slice> fragments, Collection<ComputedStatistics> computedStatistics)
     {
+        log.info("finishInsert");
+        String fragmentStr = String.join(",", fragments.stream().map(Slice::toStringUtf8).toList());
+        log.info("fragments: %s", fragmentStr);
         return Optional.empty();
     }
 
     @Override
     public ConnectorInsertTableHandle beginInsert(ConnectorSession session, ConnectorTableHandle tableHandle, List<ColumnHandle> columns, RetryMode retryMode)
     {
+        log.info("beginInsert");
         List<SheetsColumnHandle> columnHandles = columns.stream().map(x -> (SheetsColumnHandle) x).toList();
 //        log.info("beginInsert: %s", ((SheetsTableHandle) tableHandle).toString());
         return new SheetsInsertTableHandle(
@@ -182,36 +198,23 @@ public class SheetsMetadata
                 columnHandles);
     }
 
-//    @Override
-//    public Map<SchemaTableName, List<ColumnMetadata>> listTableColumns(ConnectorSession session, SchemaTablePrefix prefix)
-//    {
-//        requireNonNull(prefix, "prefix is null");
-//        ImmutableMap.Builder<SchemaTableName, List<ColumnMetadata>> columns = ImmutableMap.builder();
-//        for (SchemaTableName tableName : listTables(session, prefix.getSchema())) {
-//            Optional<ConnectorTableMetadata> tableMetadata = getTableMetadata(tableName);
-//            // table can disappear during listing operation
-//            if (tableMetadata.isPresent()) {
-//                columns.put(tableName, tableMetadata.get().getColumns());
-//            }
-//        }
-//        return columns.buildOrThrow();
-//    }
-
     private Optional<ConnectorTableMetadata> getTableMetadata(SchemaTableName tableName)
     {
+        log.info("getTableMetadata!");
         if (!listSchemaNames().contains(tableName.getSchemaName())) {
             return Optional.empty();
         }
         Optional<SheetsTable> table = sheetsClient.getTable(tableName.getTableName());
-        if (table.isPresent()) {
-            return Optional.of(new ConnectorTableMetadata(tableName, table.get().getColumnsMetadata()));
-        }
-        return Optional.empty();
+        return table.map(sheetsTable -> new ConnectorTableMetadata(
+                tableName,
+                sheetsTable.getColumnsMetadata(),
+                sheetsTable.getProperties()));
     }
 
     @Override
     public List<SchemaTableName> listTables(ConnectorSession session, Optional<String> schemaName)
     {
+        log.info("listTables Called!");
         String schema = schemaName.orElseGet(() -> getOnlyElement(SCHEMAS));
 
         if (listSchemaNames().contains(schema)) {
@@ -225,6 +228,7 @@ public class SheetsMetadata
     @Override
     public ColumnMetadata getColumnMetadata(ConnectorSession session, ConnectorTableHandle tableHandle, ColumnHandle columnHandle)
     {
+        log.info("getColumnMetadata Called!");
         return ((SheetsColumnHandle) columnHandle).getColumnMetadata();
     }
 }

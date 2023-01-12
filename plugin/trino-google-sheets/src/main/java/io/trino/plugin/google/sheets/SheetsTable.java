@@ -16,13 +16,16 @@ package io.trino.plugin.google.sheets;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.google.common.collect.ImmutableList;
+import com.google.common.collect.ImmutableMap;
 import io.trino.spi.connector.ColumnMetadata;
 
 import java.util.List;
+import java.util.Map;
 
 import static com.google.common.base.MoreObjects.toStringHelper;
 import static com.google.common.base.Preconditions.checkArgument;
 import static com.google.common.base.Strings.isNullOrEmpty;
+import static io.trino.plugin.google.sheets.SheetsTableProperties.LOCATION_PROPERTY;
 import static java.util.Objects.requireNonNull;
 
 public class SheetsTable
@@ -67,6 +70,11 @@ public class SheetsTable
     public String getLocation()
     {
         return location;
+    }
+
+    public Map<String, Object> getProperties()
+    {
+        return ImmutableMap.of(LOCATION_PROPERTY, getLocation());
     }
 
     @Override

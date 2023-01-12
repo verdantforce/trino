@@ -40,7 +40,9 @@ public class SheetsConnectorPageSinkProvider
     public ConnectorPageSink createPageSink(ConnectorTransactionHandle transactionHandle, ConnectorSession session, ConnectorOutputTableHandle outputTableHandle, ConnectorPageSinkId pageSinkId)
     {
         log.info("create Page Sink for create table as");
-        throw new RuntimeException("gsheets create table has NOT been implemented!");
+        SheetsOutputTableHandle sheetsOutputTableHandle = (SheetsOutputTableHandle) outputTableHandle;
+        log.info("outputTableHandle: %s", sheetsOutputTableHandle);
+        return sheetsConnectorPageSinkFactory.create(sheetsOutputTableHandle);
     }
 
     @Override

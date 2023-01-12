@@ -14,6 +14,7 @@
 package io.trino.plugin.google.sheets;
 
 import com.google.inject.Inject;
+import io.trino.spi.connector.ConnectorPageSink;
 
 public class SheetsConnectorPageSinkFactory
 {
@@ -25,8 +26,13 @@ public class SheetsConnectorPageSinkFactory
         this.sheetsClient = sheetsClient;
     }
 
-    public SheetsConnectorPageSink create(SheetsInsertTableHandle sheetsInsertTableHandle)
+    public ConnectorPageSink create(SheetsInsertTableHandle sheetsInsertTableHandle)
     {
-        return new SheetsConnectorPageSink(sheetsInsertTableHandle, sheetsClient);
+        return new SheetsInsertConnectorPageSink(sheetsInsertTableHandle, sheetsClient);
+    }
+
+    public ConnectorPageSink create(SheetsOutputTableHandle sheetsOutputTableHandle)
+    {
+        return new SheetsOutputConnectorPageSink(sheetsOutputTableHandle, sheetsClient);
     }
 }

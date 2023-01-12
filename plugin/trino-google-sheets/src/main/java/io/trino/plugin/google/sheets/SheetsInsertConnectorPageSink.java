@@ -31,16 +31,16 @@ import java.util.stream.Collectors;
 import static java.util.Objects.requireNonNull;
 import static java.util.concurrent.CompletableFuture.completedFuture;
 
-public class SheetsConnectorPageSink
+public class SheetsInsertConnectorPageSink
         implements ConnectorPageSink
 {
-    private static final Logger log = Logger.get(SheetsConnectorPageSink.class);
+    private static final Logger log = Logger.get(SheetsInsertConnectorPageSink.class);
 
     private final SheetsInsertTableHandle sheetsInsertTableHandle;
 
     private final SheetsClient sheetsClient;
 
-    public SheetsConnectorPageSink(SheetsInsertTableHandle sheetsInsertTableHandle, SheetsClient sheetsClient)
+    public SheetsInsertConnectorPageSink(SheetsInsertTableHandle sheetsInsertTableHandle, SheetsClient sheetsClient)
     {
         this.sheetsInsertTableHandle = sheetsInsertTableHandle;
         this.sheetsClient = sheetsClient;
@@ -62,15 +62,14 @@ public class SheetsConnectorPageSink
         //        log.info("block: %s", block);
 
         //   generate the data to write to spreadsheet
-        // step1: read existing data from gsheet
         final String sheetID = getSheetId();
         final String range = getSheetRange();
-        List<List<Object>> data = sheetsClient.readData(sheetID, range);
+        List<List<Object>> data = new ArrayList<>();
 
         List<SheetsColumnHandle> columnHandles = sheetsInsertTableHandle.getColumnHandles();
         Map<Integer, SheetsColumnHandle> columnsMap = columnHandles.stream().collect(Collectors.toUnmodifiableMap(SheetsColumnHandle::getOrdinalPosition, Function.identity()));
 
-        // step 2: append data to the end of existing data
+        // step 1: convert data from page to List<List<Object>>
         // Note: Currently all columns are passed here (regardless of whether it is getting inserted)
         // omitted columns are null
         for (int position = 0; position < page.getPositionCount(); position++) {
@@ -91,7 +90,7 @@ public class SheetsConnectorPageSink
         }
 
         // write to google spreadsheet
-        log.info("updated %d rows", sheetsClient.writeData(sheetID, range, data));
+        log.info("updated %d rows", sheetsClient.insertToSheet(sheetID, range, data));
         return NOT_BLOCKED;
     }
 

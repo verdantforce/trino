@@ -19,6 +19,12 @@ import com.google.api.client.json.JsonFactory;
 import com.google.api.client.json.jackson2.JacksonFactory;
 import com.google.api.services.sheets.v4.Sheets;
 import com.google.api.services.sheets.v4.SheetsScopes;
+import com.google.api.services.sheets.v4.model.AddSheetRequest;
+import com.google.api.services.sheets.v4.model.AppendValuesResponse;
+import com.google.api.services.sheets.v4.model.BatchUpdateSpreadsheetRequest;
+import com.google.api.services.sheets.v4.model.Request;
+import com.google.api.services.sheets.v4.model.SheetProperties;
+import com.google.api.services.sheets.v4.model.Spreadsheet;
 import com.google.api.services.sheets.v4.model.UpdateValuesResponse;
 import com.google.api.services.sheets.v4.model.ValueRange;
 import com.google.auth.http.HttpCredentialsAdapter;
@@ -39,6 +45,7 @@ import io.trino.spi.type.VarcharType;
 
 import javax.inject.Inject;
 
+import java.io.IOException;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -61,7 +68,7 @@ public class SheetsClient
 {
     private static final Logger log = Logger.get(SheetsClient.class);
 
-    private static final String APPLICATION_NAME = "trino google sheets integration";
+    public static final String APPLICATION_NAME = "trino google sheets integration";
     private static final JsonFactory JSON_FACTORY = JacksonFactory.getDefaultInstance();
 
     private static final List<String> READ_SCOPES = Collections.singletonList(SheetsScopes.SPREADSHEETS_READONLY);
@@ -110,7 +117,9 @@ public class SheetsClient
     public Optional<SheetsTable> getTable(String tableName)
     {
         Optional<String> location = tableSheetMappingCache.getUnchecked(tableName);
-        if (location.isEmpty()) return Optional.empty();
+        if (location.isEmpty()) {
+            return Optional.empty();
+        }
 
         List<List<String>> values = convertToStringValues(readAllValues(tableName));
         if (values.size() > 0) {
@@ -152,6 +161,66 @@ public class SheetsClient
             throwIfInstanceOf(e.getCause(), TrinoException.class);
             throw new TrinoException(SHEETS_METASTORE_ERROR, e);
         }
+    }
+
+    public List<String> getSheetTabs(String sheetId)
+    {
+        try {
+            Spreadsheet spreadsheet = readSheetsService.get().spreadsheets().get(sheetId).execute();
+            return spreadsheet.getSheets().stream().map(sheet -> sheet.getProperties().getTitle()).toList();
+        }
+        catch (Exception e) {
+            log.error(e, "failed to read data from sheetID %s", sheetId);
+            throw new RuntimeException("failed to read all sheet tabs");
+        }
+    }
+
+    public void createSheetTab(String sheetId, String sheetTab)
+    {
+        try {
+            Request request = new Request().setAddSheet(
+                    new AddSheetRequest().setProperties(
+                            new SheetProperties().setTitle(sheetTab)));
+            BatchUpdateSpreadsheetRequest batchUpdateSpreadsheetRequest = new BatchUpdateSpreadsheetRequest().setRequests(
+                    ImmutableList.of(request));
+            writeSheetsService.get().spreadsheets().batchUpdate(sheetId, batchUpdateSpreadsheetRequest).execute();
+        }
+        catch (Exception e) {
+            log.error(e, "failed to read data from sheetID %s", sheetId);
+            throw new RuntimeException("failed to read all sheet tabs");
+        }
+    }
+
+    public int insertToSheet(String sheetID, String sheetTab, List<List<Object>> data)
+    {
+        try {
+            ValueRange appendData = new ValueRange().setValues(data);
+            AppendValuesResponse response = writeSheetsService.get().spreadsheets().values().append(sheetID, sheetTab + "!A1", appendData).setValueInputOption("RAW").setInsertDataOption("INSERT_ROWS").execute();
+            return response.getUpdates().getUpdatedRows();
+        }
+        catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void insertTableMapping(String tableName, String location)
+    {
+        String[] tableOptions = metadataSheetId.split("#");
+        String sheetId = tableOptions[0];
+        String sheetName = tableOptions[1];
+        List<List<Object>> data = ImmutableList.of(
+                ImmutableList.of(
+                        tableName, // tableName
+                        location, // location
+                        APPLICATION_NAME, // owner
+                        "")); // notes
+        // update table metadata spreadsheet with new table
+        insertToSheet(sheetId, sheetName, data);
+
+        // update the table metadata directly
+        tableSheetMappingCache.put(
+                tableName,
+                Optional.of(location));
     }
 
     public List<List<Object>> readAllValues(String tableName)

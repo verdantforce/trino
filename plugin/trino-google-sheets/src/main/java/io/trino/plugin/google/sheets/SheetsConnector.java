@@ -21,9 +21,12 @@ import io.trino.spi.connector.ConnectorRecordSetProvider;
 import io.trino.spi.connector.ConnectorSession;
 import io.trino.spi.connector.ConnectorSplitManager;
 import io.trino.spi.connector.ConnectorTransactionHandle;
+import io.trino.spi.session.PropertyMetadata;
 import io.trino.spi.transaction.IsolationLevel;
 
 import javax.inject.Inject;
+
+import java.util.List;
 
 import static io.trino.plugin.google.sheets.SheetsTransactionHandle.INSTANCE;
 import static java.util.Objects.requireNonNull;
@@ -38,19 +41,23 @@ public class SheetsConnector
 
     private final SheetsConnectorPageSinkProvider pageSinkProvider;
 
+    private final SheetsTableProperties sheetsTableProperties;
+
     @Inject
     public SheetsConnector(
             LifeCycleManager lifeCycleManager,
             SheetsMetadata metadata,
             SheetsSplitManager splitManager,
             SheetsRecordSetProvider recordSetProvider,
-            SheetsConnectorPageSinkProvider pageSinkProvider)
+            SheetsConnectorPageSinkProvider pageSinkProvider,
+            SheetsTableProperties sheetsTableProperties)
     {
         this.lifeCycleManager = requireNonNull(lifeCycleManager, "lifeCycleManager is null");
         this.metadata = requireNonNull(metadata, "metadata is null");
         this.splitManager = requireNonNull(splitManager, "splitManager is null");
         this.recordSetProvider = requireNonNull(recordSetProvider, "recordSetProvider is null");
         this.pageSinkProvider = requireNonNull(pageSinkProvider, "page sink provider is null");
+        this.sheetsTableProperties = requireNonNull(sheetsTableProperties, "table properties is null");
     }
 
     @Override
@@ -84,6 +91,12 @@ public class SheetsConnector
     public ConnectorPageSinkProvider getPageSinkProvider()
     {
         return pageSinkProvider;
+    }
+
+    @Override
+    public List<PropertyMetadata<?>> getTableProperties()
+    {
+        return sheetsTableProperties.getTableProperties();
     }
 
     @Override
